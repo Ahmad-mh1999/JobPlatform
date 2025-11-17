@@ -33,12 +33,6 @@ class AiController extends Controller
         // 1. التحقق من المصادقة
         $user = auth()->user();
 
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'غير مصرح به. يجب أن تكون مسجلاً للدخول لاستخدام هذه الخدمة.'
-            ], 401);
-        }
 
         // 2. التحقق من الدور
         if ($user->role !== 'employee') {
@@ -74,11 +68,12 @@ class AiController extends Controller
 
         // معلومات المستخدم والبروفايل الأساسية
         $formattedData .= "- اسم المرشح: " . ($profileData['user']['name'] ?? 'غير محدد') . "\n";
+        $formattedData .= "- البريد الإلكتروني: " . ($profileData['user']['email'] ?? 'غير محدد') . "\n";
         $formattedData .= "- المسمى الوظيفي الحالي: " . ($profileData['title'] ?? 'غير محدد') . "\n";
         $formattedData .= "- ملخص البروفايل: " . ($profileData['summary'] ?? $profileData['bio'] ?? 'لا يوجد ملخص') . "\n";
         $formattedData .= "- سنوات الخبرة: " . ($profileData['years_of_experience'] ?? 'غير محدد') . "\n";
         $formattedData .= "- الموقع: " . ($profileData['location'] ?? 'غير محدد') . "\n";
-        $formattedData .= "- اللغات: " . ($profileData['languages'] ?? 'غير محدد') . "\n";
+        $formattedData .= "- اللغات (تفصيل): " . ($profileData['languages'] ?? 'غير محدد') . "\n";
         $formattedData .= "\n";
 
         // الخبرات العملية
@@ -87,7 +82,8 @@ class AiController extends Controller
             foreach ($profileData['experiences'] as $exp) {
                 $formattedData .= "  * المسمى الوظيفي: " . ($exp['job_title'] ?? 'غير محدد') . "\n";
                 $formattedData .= "  * الشركة: " . ($exp['company_name'] ?? 'غير محدد') . "\n";
-                $formattedData .= "  * الوصف: " . ($exp['description'] ?? 'لا يوجد وصف') . "\n";
+                // **ملاحظة: هذا الوصف يجب أن يكون مفصلاً ليتجنب الذكاء الاصطناعي اختصاره**
+                $formattedData .= "  * الوصف والمسؤوليات (يجب إرجاعه بالتفصيل): " . ($exp['description'] ?? 'لا يوجد وصف') . "\n";
                 $formattedData .= "  * الفترة: من " . ($exp['start_date'] ?? 'غير محدد') . " إلى " . ($exp['end_date'] ?? 'الآن') . "\n";
                 $formattedData .= "--- \n";
             }
@@ -166,6 +162,34 @@ class AiController extends Controller
         return $formattedData;
     }
 
+    /**
+     * دالة مساعدة لإنشاء الهيكل المطلوب لـ Roadmap JSON.
+     * يستخدم لتضمين الهيكل في الـ System Prompt.
+     * @return array
+     */
+    private function getRoadmapSchemaPlaceholder(): array
+    {
+        return [
+            'title' => 'عنوان خارطة الطريق المُقترحة',
+            'description' => 'ملخص قصير ومحفز حول هذه المهنة أو المجال.',
+            'estimated_duration_months' => 6,
+            'modules' => [
+                [
+                    'module_number' => 1,
+                    'module_title' => 'المرحلة الأولى: الأساسيات',
+                    'estimated_weeks' => 4,
+                    'topics' => [
+                        [
+                            'topic_name' => 'اسم الموضوع',
+                            'key_concepts' => ['المفهوم الأول', 'المفهوم الثاني'],
+                            'suggested_resources' => ['رابط أو اسم كتاب أو دورة']
+                        ]
+                    ]
+                ]
+            ]
+        ];
+    }
+
 
     /**
      * استدعاء خدمة الذكاء الاصطناعي لاقتراح الوظائف من القائمة المتاحة.
@@ -212,12 +236,14 @@ class AiController extends Controller
 
         // استدعاء خدمة الذكاء الاصطناعي
         try {
-            // Log::info("OpenRouter API Key: " . $this->apiKey); // سطر للتأكد من قيمة المفتاح
+            // استخدام نفس إعدادات المهلة 120 ثانية لحل مشكلة cURL السابقة
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
                 'X-Title' => 'AI Job Search Service' // عنوان توضيحي لـ OpenRouter
-            ])->post($this->apiEndpoint, [
+            ])->timeout(120) // مهلة الطلب الكلية: 120 ثانية
+              ->withOptions(['connect_timeout' => 120]) // مهلة الاتصال الأولي: 120 ثانية
+              ->post($this->apiEndpoint, [ 
                 'model' => $this->model,
                 'messages' => [
                     ['role' => 'system', 'content' => $systemPrompt],
@@ -294,11 +320,14 @@ class AiController extends Controller
 
         // استدعاء خدمة الذكاء الاصطناعي
         try {
+            // استخدام نفس إعدادات المهلة 120 ثانية لحل مشكلة cURL السابقة
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
                 'X-Title' => 'AI Cover Letter Generator'
-            ])->post($this->apiEndpoint, [
+            ])->timeout(120) // مهلة الطلب الكلية: 120 ثانية
+              ->withOptions(['connect_timeout' => 120]) // مهلة الاتصال الأولي: 120 ثانية
+              ->post($this->apiEndpoint, [ 
                 'model' => $this->model,
                 'messages' => [
                     ['role' => 'system', 'content' => $systemPrompt],
@@ -325,42 +354,78 @@ class AiController extends Controller
 
 
     /**
-     * استدعاء خدمة الذكاء الاصطناعي لتوليد سيرة ذاتية (CV) بصيغة HTML/CSS.
+     * استدعاء خدمة الذكاء الاصطناعي لتوليد خارطة طريق لتعلم مهنة أو مجال معين.
+     * يتطلب إدخال اسم المجال (field_name).
      */
-    public function generateCv() // تم تغيير اسم الدالة
+    public function generateRoadmap(Request $request)
     {
-        // 1. جلب البروفايل المصادق عليه
-        $profileData = $this->getAuthenticatedProfile();
-        if ($profileData instanceof \Illuminate\Http\JsonResponse) {
-            return $profileData;
+        // هذه الخدمة لا تحتاج لملف شخصي، لكنها تحتاج لمصادقة المستخدم
+        $user = auth()->user();
+
+        // 1. التحقق من المدخلات
+        $fieldName = $request->input('field_name');
+        if (empty($fieldName)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'يجب توفير اسم المجال أو المهنة المطلوبة (field_name).'
+            ], 400);
         }
 
-        $formattedProfile = $this->formatProfileData($profileData);
+        $schemaPlaceholder = $this->getRoadmapSchemaPlaceholder();
 
-        $systemPrompt = "أنت مصمم ومنسق سير ذاتية (CV) محترف. مهمتك هي تحويل ملف البروفايل المُقدم إلى سيرة ذاتية جاهزة للطباعة والتصدير. يجب عليك إرجاع كود **HTML/CSS كامل ومدمج في ملف واحد**، يمثل سيرة ذاتية ذات تصميم عصري، نظيف، وبسيط (Modern, Clean, Minimalist). يجب أن يكون الـ CV منسقاً بالكامل داخل وسم <style> وأن يكون جاهزاً للتحويل إلى PDF. يجب أن تكون اللغة العربية هي اللغة الأساسية في الـ CV. الرد يجب أن يكون كود HTML/CSS الخاص بالسيرة الذاتية فقط، بدون أي نصوص أو مقدمات إضافية.";
+        // استخدام JSON_UNESCAPED_UNICODE لضمان عرض المحتوى العربي بشكل صحيح في الـ prompt
+        $schemaJson = json_encode($schemaPlaceholder, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-        $userPrompt = "إليك ملف البروفايل الكامل للمرشح. قم بتوليد السيرة الذاتية بصيغة HTML/CSS بناءً على هذه البيانات:\n\n" . $formattedProfile;
+        $systemPrompt = "أنت خبير توجيه مهني ومصمم مناهج تعليمية. مهمتك هي إنشاء خارطة طريق تعليمية مفصلة وواقعية (Roadmap) للمجال الذي سيتم تحديده من قبل المستخدم.
+        
+        **إرشادات التنفيذ:**
+        1.  يجب أن تكون الاستجابة كائن JSON صالحاً (Valid JSON Object) فقط، بدون أي نصوص أو علامات Markdown (مثل ```json).
+        2.  الرد يجب أن يتبع الهيكل الرئيسي: { title, description, estimated_duration_months, modules }.
+        3.  يجب تقسيم الخارطة إلى 4 أو 5 مراحل منطقية (Modules).
+        4.  لكل مرحلة، يجب أن تتضمن: module_number, module_title, estimated_weeks, و مصفوفة Topics.
+        5.  لكل موضوع (Topic)، يجب أن يتضمن: topic_name, مصفوفة key_concepts, و مصفوفة suggested_resources (يجب أن تحتوي على أسماء موارد أو روابط حقيقية).
+        
+        الرد يجب أن يكون كائن JSON صالحاً باللغة العربية فقط.";
+
+        $userPrompt = "يرجى توليد خارطة طريق كاملة لتعلم مهنة: " . $fieldName;
 
         // استدعاء خدمة الذكاء الاصطناعي
         try {
+            
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
-                'X-Title' => 'AI CV Generator'
-            ])->post($this->apiEndpoint, [
+                'X-Title' => 'AI Learning Roadmap Generator'
+            ])->timeout(60) 
+            //   ->withOptions(['connect_timeout' => 120]) 
+              ->post($this->apiEndpoint, [ 
                 'model' => $this->model,
                 'messages' => [
                     ['role' => 'system', 'content' => $systemPrompt],
                     ['role' => 'user', 'content' => $userPrompt]
                 ],
+                 // ضبط الاستجابة لتكون JSON
+                'response_format' => ['type' => 'json_object'],
             ]);
 
             $response->throw();
 
-            // الرد سيكون كود HTML/CSS على شكل نص
+            $decodedBody = json_decode($response->body(), true);
+            $roadmapJsonString = $decodedBody['choices'][0]['message']['content'] ?? null;
+
+            // التحقق من أن محتوى الـ JSON الذي ولده النموذج ليس فارغاً
+            if (empty($roadmapJsonString)) {
+                Log::error("AI Roadmap Generator returned empty content despite 200 OK status. Decoded Body: " . json_encode($decodedBody));
+                return response()->json([
+                    'success' => false,
+                    'message' => 'نجح الاتصال بخدمة الذكاء الاصطناعي، لكن النموذج لم يتمكن من توليد خارطة الطريق المطلوبة. يرجى المحاولة باسم مجال مختلف أو التواصل مع الدعم الفني.',
+                ], 500);
+            }
+
+            // الرد الآن مضمون أنه JSON (تم التحقق من عدم فراغه)
             return response()->json([
                 'success' => true,
-                'data' => json_decode($response->body(), true)['choices'][0]['message']['content']
+                'data' => $roadmapJsonString
             ]);
 
         } catch (\Illuminate\Http\Client\RequestException $e) {
@@ -368,7 +433,7 @@ class AiController extends Controller
             Log::error($errorMessage);
             return response()->json(['success' => false, 'message' => $errorMessage], $e->response->status());
         } catch (\Throwable $e) {
-            Log::error("An unexpected error occurred in generateCv: " . $e->getMessage());
+            Log::error("An unexpected error occurred in generateRoadmap: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'حدث خطأ غير متوقع: ' . $e->getMessage()], 500);
         }
     }

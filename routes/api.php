@@ -10,6 +10,7 @@ use App\Http\Controllers\SkillController;
 use App\Http\Controllers\SuggestionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AiController;
+use App\Http\Controllers\PostController;
 use App\Http\Middleware\JwtMiddleware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -72,6 +73,16 @@ Route::middleware([JwtMiddleware::class])->group(function () {
     Route::put('/suggestions/{id}', [SuggestionController::class, 'update']);
     Route::delete('/suggestions/{id}', [SuggestionController::class, 'destroy']);
     Route::get('/suggestions/my', [SuggestionController::class, 'getMySuggestions']);
+
+    // Post routes
+    Route::get('/posts', [PostController::class, 'index']);
+    Route::post('/posts', [PostController::class, 'store']);
+    Route::get('/posts/{id}', [PostController::class, 'show']);
+    Route::put('/posts/{id}', [PostController::class, 'update']);
+    Route::delete('/posts/{id}', [PostController::class, 'destroy']);
+    Route::post('/posts/{id}/like', [PostController::class, 'like']);
+    Route::post('/posts/{id}/comments', [PostController::class, 'addComment']);
+    Route::get('/posts/{id}/comments', [PostController::class, 'getComments']);
 });
 
 Route::middleware(['jwt', 'role:admin'])->group(function () {
@@ -99,10 +110,9 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
 Route::middleware([JwtMiddleware::class])->group(function () {
     Route::get('suggestions/jobs', [SuggestionController::class, 'getRecommendedJobs']);
     Route::post('suggestions/cover-letter/{jobId}', [SuggestionController::class, 'generateCoverLetter']);
-    Route::post('suggestions/analyze-cv', [SuggestionController::class, 'analyzeCv']);
 });
 Route::middleware([JwtMiddleware::class])->group(function () {
     Route::post('/ai/suggest-jobs', [AiController::class, 'suggestJobs']);
     Route::post('/ai/generate-cover-letter', [AiController::class, 'generateCoverLetter']);
-    Route::post('/ai/generate-cv', [AiController::class, 'generateCv']);
+    Route::post('/ai/generate-roadmap', [AiController::class, 'generateRoadmap']);
 });

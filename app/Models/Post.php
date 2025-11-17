@@ -39,6 +39,16 @@ class Post extends Model
         return $this->belongsTo(Job::class);
     }
 
+    public function comments()
+    {
+        return $this->hasMany(Comment::class);
+    }
+
+    public function likes()
+    {
+        return $this->morphMany(Like::class, 'likeable');
+    }
+
     // Increment likes
     public function incrementLikes()
     {
