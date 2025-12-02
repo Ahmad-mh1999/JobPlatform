@@ -43,7 +43,37 @@ class ProfileController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
-       
+
+    }
+
+    // Get all profiles
+    public function index()
+    {
+        Log::info('ProfileController@index called', ['user_id' => auth()->id()]);
+        try {
+            $user = auth()->user();
+            if ($user->role !== 'admin') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لا تملك الصلاحية للقيام بهذا الإجراء'
+                ], 401);
+            }
+
+            $profiles = EmployeeProfile::with(['user', 'skills', 'education', 'experiences'])->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'تم جلب جميع البروفايلات بنجاح',
+                'data' => ['profiles' => $profiles]
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب البروفايلات',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     // Create or update employee profile

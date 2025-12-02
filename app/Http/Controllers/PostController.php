@@ -96,10 +96,23 @@ class PostController extends Controller
     // Delete a post
     public function destroy($id)
     {
-        $post = Post::where('user_id', Auth::id())->findOrFail($id);
+        $user = Auth::user();
+        $post = Post::findOrFail($id);
+
+        // Check if user is admin or post owner
+        if ($user->role !== 'admin' && $post->user_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'غير مصرح لك بحذف هذا المنشور'
+            ], 403);
+        }
+
         $post->delete();
 
-        return response()->json(['message' => 'Post deleted successfully']);
+        return response()->json([
+            'success' => true,
+            'message' => 'تم حذف المنشور بنجاح'
+        ]);
     }
 
     // Like or unlike a post

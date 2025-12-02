@@ -236,10 +236,10 @@ class CompanyController extends Controller
             if ($user->role !== 'admin' && $company->user_id !== $user->id) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'الشركة غير موجودة أو لا تملك صلاحية الحذف'
+                    'message' => 'غير مصرح لك بحذف هذه الشركة'
                 ], 403);
             }
-            
+
 
             // Delete associated files
             if ($company->logo) {

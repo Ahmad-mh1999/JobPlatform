@@ -19,7 +19,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
-Route::post('test', [AuthController::class, 'test']);
 
 
 Route::middleware([JwtMiddleware::class])->group(function () {
@@ -31,15 +30,16 @@ Route::middleware([JwtMiddleware::class])->group(function () {
 
 Route::middleware([JwtMiddleware::class])->group(function () {
     // Profile routes
+    Route::get('/profiles', [ProfileController::class, 'index']);
     Route::get('/profiles/{userId}', [ProfileController::class, 'show']);
     Route::post('/profiles', [ProfileController::class, 'createOrUpdate']);
-    Route::get('profiles/me', [ProfileController::class, 'me']);
-    Route::post('/profiles/skills', [ProfileController::class, 'addSkill']);
+    Route::get('profile/me', [ProfileController::class, 'me']);
+    Route::post('/profiles/addskills', [ProfileController::class, 'addSkill']);
     Route::delete('/profiles/skills/{skillId}', [ProfileController::class, 'removeSkill']);
-    Route::post('/profiles/education', [ProfileController::class, 'addEducation']);
+    Route::post('/profiles/addeducation', [ProfileController::class, 'addEducation']);
     Route::put('/profiles/education/{id}', [ProfileController::class, 'updateEducation']);
     Route::delete('/profiles/education/{id}', [ProfileController::class, 'deleteEducation']);
-    Route::post('/profiles/experiences', [ProfileController::class, 'addExperience']);
+    Route::post('/profiles/addexperiences', [ProfileController::class, 'addExperience']);
     Route::put('/profiles/experiences/{id}', [ProfileController::class, 'updateExperience']);
     Route::delete('/profiles/experiences/{id}', [ProfileController::class, 'deleteExperience']);
 

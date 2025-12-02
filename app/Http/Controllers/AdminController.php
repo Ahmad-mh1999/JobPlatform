@@ -4,10 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Company;
-use App\Models\Jop;
+use App\Models\Job;
 use App\Models\Application;
 use App\Models\Post;
 use App\Models\Suggestion;
+use App\Models\EmployeeProfile;
+use App\Models\Education;
+use App\Models\Experience;
+use App\Models\Skill;
+use App\Models\Comment;
+use App\Models\Like;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
@@ -18,62 +24,82 @@ class AdminController extends Controller
     public function dashboard()
     {
         Log::info('AdminController@dashboard called', ['user_id' => auth()->id()]);
+        
         try {
             $user = auth()->user();
 
-            if ($user->role !== 'admin') {
+            // 1. التحقق من صلاحيات المدير
+            if (!$user || $user->role !== 'admin') {
                 return response()->json([
                     'success' => false,
                     'message' => 'هذه الخدمة متاحة للمدراء فقط'
                 ], 403);
             }
 
-            $stats = [
+            // 2. جلب البيانات الكاملة من جميع الجداول
+            // ملاحظة: جلب جميع البيانات (get()) قد يكون غير فعال للمشاريع الكبيرة.
+            // يمكنك التبديل إلى الخيار البديل (أحدث 10 سجلات) أدناه لتحسين الأداء.
+
+            $fullData = [
+                // جدول المستخدمين (Users)
                 'users' => [
-                    'total' => User::count(),
-                    'employees' => User::where('role', 'employee')->count(),
-                    'companies' => User::where('role', 'company')->count(),
-                    'admins' => User::where('role', 'admin')->count(),
+                    'total_count' => User::count(),
+                    'all' => User::all(), // جلب جميع المستخدمين
+                    'employees' => User::where('role', 'employee')->get(),
+                    'companies_users' => User::where('role', 'company')->get(),
+                    'admins' => User::where('role', 'admin')->get(),
                 ],
+
+                // جدول الشركات (Companies)
                 'companies' => [
-                    'total' => Company::count(),
-                    'verified' => Company::where('is_verified', true)->count(),
+                    'total_count' => Company::count(),
+                    'all' => Company::all(), // جلب جميع الشركات
+                    'verified' => Company::where('is_verified', true)->get(),
                 ],
+
+                // جدول الوظائف (Jobs) - هنا نستخدم Eager Loading لتحميل بيانات الشركة
                 'jobs' => [
-                    'total' => Jop::count(),
-                    'published' => Jop::where('status', 'published')->count(),
-                    'draft' => Jop::where('status', 'draft')->count(),
-                    'closed' => Jop::where('status', 'closed')->count(),
+                    'total_count' => Job::count(),
+                    'all' => Job::with('company')->get(), // جلب جميع الوظائف مع بيانات الشركة
+                    'published' => Job::where('status', 'published')->with('company')->get(),
+                    'draft' => Job::where('status', 'draft')->with('company')->get(),
+                    'closed' => Job::where('status', 'closed')->with('company')->get(),
                 ],
+
+                // جدول طلبات التوظيف (Applications) - تحميل بيانات الوظيفة والمتقدم
                 'applications' => [
-                    'total' => Application::count(),
-                    'pending' => Application::where('status', 'pending')->count(),
-                    'accepted' => Application::where('status', 'accepted')->count(),
+                    'total_count' => Application::count(),
+                    'all' => Application::with(['job', 'employeeProfile'])->get(), // جلب جميع الطلبات مع بيانات الوظيفة والمستخدم
+                    'pending' => Application::where('status', 'pending')->with(['job', 'employeeProfile'])->get(),
+                    'accepted' => Application::where('status', 'accepted')->with(['job', 'employeeProfile'])->get(),
                 ],
+
+                // جدول المنشورات (Posts) - تحميل بيانات المستخدم الذي أنشأ المنشور
                 'posts' => [
-                    'total' => Post::count(),
-                    'text' => Post::where('type', 'text')->count(),
-                    'job_posts' => Post::where('type', 'job_post')->count(),
+                    'total_count' => Post::count(),
+                    'all' => Post::with('user')->get(), // جلب جميع المنشورات مع بيانات المستخدم
+                    'text' => Post::where('type', 'text')->with('user')->get(),
+                    'job_posts' => Post::where('type', 'job_post')->with('user')->get(),
                 ],
-                'suggestions' => [
-                    'total' => Suggestion::count(),
-                    'pending' => Suggestion::where('status', 'pending')->count(),
-                ],
+
             ];
 
             return response()->json([
                 'success' => true,
-                'data' => ['stats' => $stats]
+                'message' => 'تم جلب البيانات الكاملة بنجاح.',
+                'data' => $fullData
             ], 200);
 
         } catch (\Exception $e) {
+            Log::error('Error fetching admin dashboard data: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء جلب إحصائيات لوحة التحكم',
+                'message' => 'حدث خطأ أثناء جلب بيانات لوحة التحكم الكاملة',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
+   
 
     // Get all users with pagination
     public function getUsers(Request $request)
@@ -221,7 +247,7 @@ class AdminController extends Controller
                 ], 403);
             }
 
-            $query = Jop::with(['company', 'skills']);
+            $query = Job::with(['company', 'skills']);
 
             if ($request->has('status') && $request->status) {
                 $query->where('status', $request->status);

@@ -67,7 +67,7 @@ class JobController extends Controller
         try {
             $user = auth()->user();
 
-            if ($user->role !== 'company' || $user->role !== 'admin') {
+            if ($user->role !== 'company' && $user->role !== 'admin') {
                 return response()->json([
                     'success' => false,
                     'message' => 'هذه الخدمة متاحة للشركات فقط'
@@ -258,22 +258,24 @@ class JobController extends Controller
         Log::info('JobController@destroy called', ['user_id' => auth()->id(), 'id' => $id]);
         try {
             $user = auth()->user();
-            $company = \App\Models\Company::where('user_id', $user->id)->first();
-
-            if (!$company) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'الشركة غير موجودة'
-                ], 404);
-            }
-
-            $job = Job::where('id', $id)->where('company_id', $company->id)->first();
+            $job = Job::find($id);
 
             if (!$job) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'الوظيفة غير موجودة أو لا تملك صلاحية الحذف'
+                    'message' => 'الوظيفة غير موجودة'
                 ], 404);
+            }
+
+            // Check if user is admin or job belongs to user's company
+            if ($user->role !== 'admin') {
+                $company = \App\Models\Company::where('user_id', $user->id)->first();
+                if (!$company || $job->company_id !== $company->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'غير مصرح لك بحذف هذه الوظيفة'
+                    ], 403);
+                }
             }
 
             $job->delete();

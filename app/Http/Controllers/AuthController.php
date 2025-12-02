@@ -138,7 +138,7 @@ class AuthController extends Controller
     public function getOneUser(Request $request)
     {
         try {
-            if (! JWTAuth::parseToken()->authenticate()) {
+            if (! $user = JWTAuth::parseToken()->authenticate()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'غير مصرح لك بالوصول'
@@ -146,12 +146,20 @@ class AuthController extends Controller
             }
 
             $oneUser = User::find($request->id);
-            
+
             if (!$oneUser) {
                 return response()->json([
                     'success' => false,
                     'message' => 'المستخدم المطلوب غير موجود'
                 ], 404);
+            }
+
+            // Prevent access to admin user
+            if ($oneUser->isAdmin() || $oneUser->id == 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'غير مصرح لك بالوصول إلى هذا المستخدم'
+                ], 403);
             }
 
             return response()->json([
@@ -160,7 +168,7 @@ class AuthController extends Controller
                     'user' => $oneUser
                 ]
             ], 200);
-            
+
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
@@ -194,10 +202,26 @@ class AuthController extends Controller
     public function delete($id)
     {
         try {
+            if (! $authenticatedUser = JWTAuth::parseToken()->authenticate()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'غير مصرح لك بالوصول'
+                ], 401);
+            }
+
             $user = User::findOrFail($id);
+
+            // Check if authenticated user is admin or the account owner
+            if (!$authenticatedUser->isAdmin() && $authenticatedUser->id != $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'غير مصرح لك بحذف هذا المستخدم'
+                ], 403);
+            }
+
             $userData = $user->toArray();
             $user->delete();
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'تم حذف المستخدم بنجاح',
@@ -205,13 +229,19 @@ class AuthController extends Controller
                     'deleted_user' => $userData
                 ]
             ], 200);
-            
+
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'المستخدم غير موجود'
             ], 404);
-            
+
+        } catch (JWTException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'التوكن غير صالح',
+                'error' => $e->getMessage()
+            ], 401);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
