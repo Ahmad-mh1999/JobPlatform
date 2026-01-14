@@ -16,14 +16,6 @@ class SkillController extends Controller
     {
         Log::info('SkillController@index called', ['user_id' => auth()->id()]);
         try {
-            $user = auth()->user();
-            if ($user->role !== 'admin') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'لا تملك الصلاحية لعرض المهارات'
-                ], 403);
-            }
-
             $skills = Skill::all();
             return response()->json([
                 'success' => true,

@@ -43,7 +43,7 @@ class AdminController extends Controller
                     'all' => User::all(), // جلب جميع المستخدمين
                     'employees' => User::where('role', 'employee')->get(),
                     'companies_users' => User::where('role', 'company')->get(),
-                    'admins' => User::where('role', 'admin')->get(),
+                    
                 ],
 
                 // جدول الشركات (Companies)

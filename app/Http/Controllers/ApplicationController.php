@@ -80,6 +80,7 @@ class ApplicationController extends Controller
             $validator = Validator::make($request->all(), [
                 'job_id' => 'required|exists:jobs,id',
                 'cover_letter' => 'nullable|string',
+                'recommendation_message' => 'required|string',
                 'cv_file' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
             ]);
 
@@ -125,8 +126,10 @@ class ApplicationController extends Controller
 
             $data = [
                 'job_id' => $request->job_id,
+                'job_seeker_id' => $user->id,
                 'employee_profile_id' => $employeeProfile->id,
                 'cover_letter' => $request->cover_letter,
+                'recommendation_message' => $request->recommendation_message,
             ];
 
             // Handle CV file upload

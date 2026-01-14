@@ -62,6 +62,11 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(Post::class);
     }
 
+    public function savedPosts()
+    {
+        return $this->belongsToMany(Post::class, 'user_saved_posts')->withTimestamps();
+    }
+
     // Accessor to get profile based on role
     public function getProfileAttribute()
     {

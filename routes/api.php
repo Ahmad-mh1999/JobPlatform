@@ -59,20 +59,21 @@ Route::middleware([JwtMiddleware::class])->group(function () {
     Route::get('/jobs/company/my', [JobController::class, 'getByCompany']);
 
     // Application routes
-    Route::get('/applications/job/{jobId}', [ApplicationController::class, 'index']);
+    Route::get('/applications/job/{jobId}', [ApplicationController::class, 'index'])->whereNumber('jobId');
     Route::post('/applications', [ApplicationController::class, 'store']);
-    Route::get('/applications/{id}', [ApplicationController::class, 'show']);
-    Route::put('/applications/{id}', [ApplicationController::class, 'update']);
-    Route::delete('/applications/{id}', [ApplicationController::class, 'destroy']);
     Route::get('/applications/my', [ApplicationController::class, 'getMyApplications']);
+    Route::get('/applications/{id}', [ApplicationController::class, 'show'])->whereNumber('id');
+    Route::put('/applications/{id}', [ApplicationController::class, 'update'])->whereNumber('id');
+    Route::delete('/applications/{id}', [ApplicationController::class, 'destroy'])->whereNumber('id');
 
+    Route::get('/skills',[SkillController::class, 'index']);
     // Suggestion routes
     Route::get('/suggestions', [SuggestionController::class, 'index']);
     Route::post('/suggestions', [SuggestionController::class, 'store']);
-    Route::get('/suggestions/{id}', [SuggestionController::class, 'show']);
-    Route::put('/suggestions/{id}', [SuggestionController::class, 'update']);
-    Route::delete('/suggestions/{id}', [SuggestionController::class, 'destroy']);
     Route::get('/suggestions/my', [SuggestionController::class, 'getMySuggestions']);
+    Route::get('/suggestions/{id}', [SuggestionController::class, 'show'])->whereNumber('id');
+    Route::put('/suggestions/{id}', [SuggestionController::class, 'update'])->whereNumber('id');
+    Route::delete('/suggestions/{id}', [SuggestionController::class, 'destroy'])->whereNumber('id');
 
     // Post routes
     Route::get('/posts', [PostController::class, 'index']);
@@ -83,6 +84,10 @@ Route::middleware([JwtMiddleware::class])->group(function () {
     Route::post('/posts/{id}/like', [PostController::class, 'like']);
     Route::post('/posts/{id}/comments', [PostController::class, 'addComment']);
     Route::get('/posts/{id}/comments', [PostController::class, 'getComments']);
+    Route::post('/posts/{id}/save', [PostController::class, 'savePost']);
+    Route::get('/posts/saved', [PostController::class, 'getSavedPosts']);
+    Route::get('/posts/my-saved', [PostController::class, 'getSavedPosts']); // Alternative route
+    Route::get('/saved-posts-simple', [PostController::class, 'getSavedPosts']); // Simple route
 });
 
 Route::middleware(['jwt', 'role:admin'])->group(function () {
@@ -99,7 +104,6 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::delete('/admin/jobs/{id}', [AdminController::class, 'deleteJob']);
     Route::get('/admin/posts', [AdminController::class, 'getPosts']);
     Route::delete('/admin/posts/{id}', [AdminController::class, 'deletePost']);
-    Route::get('admin/skills',[SkillController::class, 'index']);
     Route::post('admin/skills',[SkillController::class, 'store']);
     Route::get('admin/skills/{id}',[SkillController::class, 'show']);
     Route::put('admin/skills/{id}',[SkillController::class, 'update']);
@@ -109,10 +113,9 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
 // AI Suggestions Routes
 Route::middleware([JwtMiddleware::class])->group(function () {
     Route::get('suggestions/jobs', [SuggestionController::class, 'getRecommendedJobs']);
-    Route::post('suggestions/cover-letter/{jobId}', [SuggestionController::class, 'generateCoverLetter']);
+    Route::post('suggestions/cover-letter/{jobId}', [SuggestionController::class, 'generateCoverLetter'])->whereNumber('jobId');
 });
 Route::middleware([JwtMiddleware::class])->group(function () {
     Route::post('/ai/suggest-jobs', [AiController::class, 'suggestJobs']);
     Route::post('/ai/generate-cover-letter', [AiController::class, 'generateCoverLetter']);
-    Route::post('/ai/generate-roadmap', [AiController::class, 'generateRoadmap']);
 });

@@ -12,7 +12,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('job_id')->constrained()->onDelete('cascade');
             $table->foreignId('employee_profile_id')->constrained()->onDelete('cascade');
+            $table->foreignId('job_seeker_id')->constrained('users')->onDelete('cascade');
             $table->text('cover_letter')->nullable();
+            $table->text('recommendation_message');
             $table->string('cv_file')->nullable();
             $table->enum('status', ['pending', 'reviewed', 'shortlisted', 'interviewed', 'accepted', 'rejected'])->default('pending');
             $table->text('notes')->nullable(); 

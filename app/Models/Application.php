@@ -11,12 +11,18 @@ class Application extends Model
 
     protected $fillable = [
         'job_id',
+        'job_seeker_id',
         'employee_profile_id',
         'cover_letter',
+        'recommendation_message',
         'cv_file',
         'status',
         'notes',
         'match_score',
+    ];
+
+    protected $appends = [
+        'status_label',
     ];
 
     protected $casts = [
@@ -32,6 +38,15 @@ class Application extends Model
     public function employeeProfile()
     {
         return $this->belongsTo(EmployeeProfile::class);
+    }
+
+    public function getStatusLabelAttribute()
+    {
+        return match ($this->status) {
+            'accepted' => 'مقبول',
+            'rejected' => 'مرفوض',
+            default => 'قيد المراجعة',
+        };
     }
 
     // Get applicant user

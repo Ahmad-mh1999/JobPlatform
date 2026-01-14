@@ -19,7 +19,8 @@ class ProfileController extends Controller
         Log::info('ProfileController@show called', ['userId' => $userId]);
         try {
             $profile = EmployeeProfile::with(['user', 'skills', 'education', 'experiences'])
-                ->find($userId);
+                ->where('user_id', $userId)
+                ->first();
 
             if (!$profile) {
                 return response()->json([

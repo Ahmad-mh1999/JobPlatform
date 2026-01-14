@@ -112,12 +112,26 @@ class AuthController extends Controller
     public function getUser()
     {
         try {
+            \Log::info('=== GET USER DEBUG ===');
+            \Log::info('Get user request received');
+            
             if (! $user = JWTAuth::parseToken()->authenticate()) {
+                \Log::error('User not found in token');
                 return response()->json([
                     'success' => false,
                     'message' => 'المستخدم غير موجود'
                 ], 404);
             }
+
+            // Load profile based on user role
+            if ($user->role === 'employee') {
+                $user->load('employeeProfile');
+            } elseif ($user->role === 'company') {
+                $user->load('company');
+            }
+
+            \Log::info('User found:', ['user_id' => $user->id, 'user_name' => $user->name, 'user_role' => $user->role]);
+            \Log::info('Profile loaded:', ['has_profile' => !!$user->profile]);
 
             return response()->json([
                 'success' => true,
@@ -127,6 +141,7 @@ class AuthController extends Controller
             ], 200);
             
         } catch (JWTException $e) {
+            \Log::error('JWT Exception in getUser:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
                 'message' => 'التوكن غير صالح',

@@ -18,8 +18,22 @@ class JwtMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         try {
+            \Log::info('JWT Middleware - Processing request:', [
+                'method' => $request->method(),
+                'path' => $request->path(),
+                'has_token' => $request->hasHeader('Authorization'),
+                'token_preview' => $request->hasHeader('Authorization') ? substr($request->header('Authorization'), 0, 50) . '...' : 'none'
+            ]);
+            
             $user = JWTAuth::parseToken()->authenticate();
+            
+            \Log::info('JWT Middleware - User authenticated:', ['user_id' => $user->id]);
+            
         } catch (JWTException $e) {
+            \Log::error('JWT Middleware - Token validation failed:', [
+                'error' => $e->getMessage(),
+                'path' => $request->path()
+            ]);
             return response()->json(['error' => 'Token not valid'], 401);
         }
 
