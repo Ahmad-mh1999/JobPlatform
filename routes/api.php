@@ -112,7 +112,7 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
 
 // AI Suggestions Routes
 Route::middleware([JwtMiddleware::class])->group(function () {
-    Route::get('suggestions/jobs', [SuggestionController::class, 'getRecommendedJobs']);
+    Route::get('suggestions/jobs', [AiController::class, 'suggestJobs']);
     Route::post('suggestions/cover-letter/{jobId}', [SuggestionController::class, 'generateCoverLetter'])->whereNumber('jobId');
 });
 Route::middleware([JwtMiddleware::class])->group(function () {

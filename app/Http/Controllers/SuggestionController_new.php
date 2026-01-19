@@ -270,89 +270,86 @@ class SuggestionController extends Controller
         return array_slice($recommendations, 0, 5); // Return only top 5
     }
 
- 
+    /**
+     * Fallback recommendations if AI fails
+     */
+    protected function getFallbackRecommendations($profile, $jobs)
+    {
+        $employeeSkills = $profile->skills->pluck('name')->toArray();
+        $recommendations = [];
 
-/**
- * Fallback recommendations if AI fails
- */
-protected function getFallbackRecommendations($profile, $jobs)
-{
-    $employeeSkills = $profile->skills->pluck('name')->toArray();
-    $recommendations = [];
+        foreach ($jobs as $job) {
+            $jobSkills = $job->skills->pluck('name')->toArray();
+            $matchScore = $this->calculateMatchScore($employeeSkills, $jobSkills);
 
-    foreach ($jobs as $job) {
-        $jobSkills = $job->skills->pluck('name')->toArray();
-        $matchScore = $this->calculateMatchScore($employeeSkills, $jobSkills);
-
-        if ($matchScore > 0) {
-            $recommendations[] = [
-                'job_id' => $job->id,
-                'match_score' => $matchScore,
-                'job' => $job,
-                'reasoning' => 'تتطابق ' . $matchScore . '% من المهارات المطلوبة مع مهاراتك',
-                'pros' => $this->getMatchingSkills($employeeSkills, $jobSkills),
-                'cons' => $this->getMissingSkills($employeeSkills, $jobSkills),
-                'advice' => $matchScore >= 70 
-                    ? 'تطابق ممتاز! ننصحك بالتقديم فوراً' 
-                    : 'يمكنك التقديم وتعلم المهارات الناقصة'
-            ];
+            if ($matchScore > 0) {
+                $recommendations[] = [
+                    'job_id' => $job->id,
+                    'match_score' => $matchScore,
+                    'job' => $job,
+                    'reasoning' => 'تتطابق ' . $matchScore . '% من المهارات المطلوبة مع مهاراتك',
+                    'pros' => $this->getMatchingSkills($employeeSkills, $jobSkills),
+                    'cons' => $this->getMissingSkills($employeeSkills, $jobSkills),
+                    'advice' => $matchScore >= 70 
+                        ? 'تطابق ممتاز! ننصحك بالتقديم فوراً' 
+                        : 'يمكنك التقديم وتعلم المهارات الناقصة'
+                ];
+            }
         }
+
+        // Sort by match score
+        usort($recommendations, function($a, $b) {
+            return $b['match_score'] - $a['match_score'];
+        });
+
+        return array_slice($recommendations, 0, 10);
     }
 
-    // Sort by match score
-    usort($recommendations, function($a, $b) {
-        return $b['match_score'] - $a['match_score'];
-    });
+    /**
+     * Match score calculation (fallback if AI fails)
+     */
+    protected function calculateMatchScore($employeeSkills, $jobSkills)
+    {
+        if (empty($employeeSkills) || empty($jobSkills)) {
+            return 0;
+        }
 
-    return array_slice($recommendations, 0, 10);
-}
+        $employeeSkillNames = array_map('strtolower', $employeeSkills);
+        $jobSkillNames = array_map('strtolower', $jobSkills);
 
-/**
- * Match score calculation (fallback if AI fails)
- */
-protected function calculateMatchScore($employeeSkills, $jobSkills)
-{
-    if (empty($employeeSkills) || empty($jobSkills)) {
-        return 0;
+        $matchingSkills = array_intersect($employeeSkillNames, $jobSkillNames);
+        $matchPercentage = (count($matchingSkills) / count($jobSkillNames)) * 100;
+
+        return round($matchPercentage);
     }
 
-    $employeeSkillNames = array_map('strtolower', $employeeSkills);
-    $jobSkillNames = array_map('strtolower', $jobSkills);
+    /**
+     * Get matching skills
+     */
+    protected function getMatchingSkills($employeeSkills, $jobSkills)
+    {
+        return array_values(array_intersect(
+            array_map('strtolower', $employeeSkills),
+            array_map('strtolower', $jobSkills)
+        ));
+    }
 
-    $matchingSkills = array_intersect($employeeSkillNames, $jobSkillNames);
-    $matchPercentage = (count($matchingSkills) / count($jobSkillNames)) * 100;
+    /**
+     * Get missing skills
+     */
+    protected function getMissingSkills($employeeSkills, $jobSkills)
+    {
+        return array_values(array_diff(
+            array_map('strtolower', $jobSkills),
+            array_map('strtolower', $employeeSkills)
+        ));
+    }
 
-    return round($matchPercentage);
-}
-
-/**
- * Get matching skills
- */
-protected function getMatchingSkills($employeeSkills, $jobSkills)
-{
-    return array_values(array_intersect(
-        array_map('strtolower', $employeeSkills),
-        array_map('strtolower', $jobSkills)
-    ));
-}
-
-/**
- * Get missing skills
- */
-protected function getMissingSkills($employeeSkills, $jobSkills)
-{
-    return array_values(array_diff(
-        array_map('strtolower', $jobSkills),
-        array_map('strtolower', $employeeSkills)
-    ));
-}
-
-/**
- * Generate AI cover letter
- */
+    /**
+     * Generate AI cover letter
+     */
     public function generateCoverLetter($jobId)
     {
-
         try {
             $user = auth()->user();
             $profile = EmployeeProfile::with('skills')->where('user_id', $user->id)->first();
@@ -364,20 +361,15 @@ protected function getMissingSkills($employeeSkills, $jobSkills)
                 ], 404);
             }
 
-            $job = Job::with(['company','skills'])->findOrFail($jobId);
+            $job = Job::with('company')->findOrFail($jobId);
             
             $coverLetter = $this->generateAICoverLetter($profile, $job);
 
             if (!$coverLetter) {
-                $fallback = $this->generateCoverLetterFallback($profile, $job);
                 return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'cover_letter' => $fallback
-                    ],
-                    'cover_letter' => $fallback,
-                    'fallback' => true
-                ], 200);
+                    'success' => false,
+                    'message' => 'فشل في إنشاء خطاب التقديم'
+                ], 500);
             }
 
             return response()->json([
@@ -396,208 +388,110 @@ protected function getMissingSkills($employeeSkills, $jobSkills)
         }
     }
 
-/**
- * Generate AI cover letter using same logic as AiController
- */
-private function generateAICoverLetter($profile, $job)
-{
-    try {
-        $formattedProfile = $this->formatProfileData($profile->toArray());
-        $formattedJob = $this->formatJobData($job->toArray());
+    /**
+     * Generate AI cover letter using same logic as AiController
+     */
+    private function generateAICoverLetter($profile, $job)
+    {
+        try {
+            $formattedProfile = $this->formatProfileData($profile->toArray());
+            $formattedJob = $this->formatJobData($job->toArray());
 
-        $systemPrompt = "أنت كاتب محترف لرسائل التغطية (Cover Letters). مهمتك هي كتابة رسالة تغطية قوية ومقنعة باللغة العربية. يجب أن تكون الرسالة موجهة نحو الوظيفة المحددة وتبرز بشكل خاص الخبرات والمهارات الأكثر صلة الموجودة في ملف المرشح. يجب أن تكون الرسالة موجزة واحترافية (بحد أقصى 350 كلمة). الرد يجب أن يكون رسالة التغطية فقط، بدون أي مقدمات أو خاتمات إضافية.";
-        
-        $userPrompt = "إليك بيانات المرشح وبيانات الوظيفة. قم بكتابة رسالة التغطية بناءً عليها.\n\n"
-                      . $formattedProfile . "\n"
-                      . $formattedJob;
+            $systemPrompt = "أنت كاتب محترف لرسائل التغطية (Cover Letters). مهمتك هي كتابة رسالة تغطية قوية ومقنعة باللغة العربية. يجب أن تكون الرسالة موجهة نحو الوظيفة المحددة وتبرز بشكل خاص الخبرات والمهارات الأكثر صلة الموجودة في ملف المرشح. يجب أن تكون الرسالة موجزة واحترافية (بحد أقصى 350 كلمة). الرد يجب أن يكون رسالة التغطية فقط، بدون أي مقدمات أو خاتمات إضافية.";
+            
+            $userPrompt = "إليك بيانات المرشح وبيانات الوظيفة. قم بكتابة رسالة التغطية بناءً عليها.\n\n"
+                          . $formattedProfile . "\n"
+                          . $formattedJob;
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->apiKey,
-            'Content-Type' => 'application/json',
-            'X-Title' => 'AI Cover Letter Generator'
-        ])->timeout(120)
-          ->withOptions(['connect_timeout' => 120])
-          ->post($this->apiEndpoint, [ 
-            'model' => $this->model,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user', 'content' => $userPrompt]
-            ],
-        ]);
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Content-Type' => 'application/json',
+                'X-Title' => 'AI Cover Letter Generator'
+            ])->timeout(120)
+              ->withOptions(['connect_timeout' => 120])
+              ->post($this->apiEndpoint, [ 
+                'model' => $this->model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user', 'content' => $userPrompt]
+                ],
+            ]);
 
-        if ($response->successful()) {
-            return json_decode($response->body(), true)['choices'][0]['message']['content'];
+            if ($response->successful()) {
+                return json_decode($response->body(), true)['choices'][0]['message']['content'];
+            }
+
+            return null;
+
+        } catch (\Exception $e) {
+            Log::error('AI Cover Letter Error: ' . $e->getMessage());
+            return null;
         }
-
-        return null;
-
-    } catch (\Exception $e) {
-        Log::error('AI Cover Letter Error: ' . $e->getMessage());
-        return null;
     }
-}
 
-/**
- * Format job data for AI (from AiController)
- */
+    /**
+     * Format job data for AI (from AiController)
+     */
     private function formatJobData(array $jobData): string
     {
         $formattedData = "--- تفاصيل الوظيفة المقدم لها ---\n";
         $formattedData .= "- المسمى الوظيفي: " . ($jobData['title'] ?? 'غير محدد') . "\n";
         $formattedData .= "- وصف الوظيفة: " . ($jobData['description'] ?? 'لا يوجد وصف') . "\n";
         $formattedData .= "- متطلبات الوظيفة: " . ($jobData['requirements'] ?? 'لا توجد متطلبات') . "\n";
-        $companyName = isset($jobData['company']['company_name']) ? $jobData['company']['company_name'] : ($jobData['company_name'] ?? 'غير محدد');
-        $formattedData .= "- الشركة: " . $companyName . "\n";
+        $formattedData .= "- الشركة: " . ($jobData['company_name'] ?? 'غير محدد') . "\n";
         $formattedData .= "- الموقع: " . ($jobData['location'] ?? 'غير محدد') . "\n";
         return $formattedData;
     }
 
-    private function generateCoverLetterFallback($profile, $job): string
+    /**
+     * Analyze CV text and extract information
+     */
+    public function analyzeCv(Request $request)
     {
-        $p = $profile->toArray();
-        $j = $job->toArray();
-        $name = $p['user']['name'] ?? '';
-        $title = $p['title'] ?? '';
-        $summary = $p['summary'] ?? ($p['bio'] ?? '');
-        $years = $p['years_of_experience'] ?? '';
-        $location = $p['location'] ?? '';
-        $skills = [];
-        if (!empty($p['skills'])) {
-            foreach ($p['skills'] as $s) {
-                if (!empty($s['name'])) {
-                    $skills[] = $s['name'];
-                }
-            }
-        }
-        $skillsText = empty($skills) ? '' : implode('، ', $skills);
-        $jobTitle = $j['title'] ?? '';
-        $companyName = isset($j['company']['company_name']) ? $j['company']['company_name'] : ($j['company_name'] ?? '');
-        $requirements = $j['requirements'] ?? '';
-        $description = $j['description'] ?? '';
-        $jobSkillNames = [];
-        if (!empty($j['skills'])) {
-            foreach ($j['skills'] as $js) {
-                if (!empty($js['name'])) {
-                    $jobSkillNames[] = $js['name'];
-                }
-            }
-        }
-        if (empty($jobSkillNames)) {
-            $text = ($requirements ?? '') . ' ' . ($description ?? '');
-            $parts = preg_split('/[\\,\\؛\\،\\|\\-\\n\\.]+/u', $text);
-            foreach ($parts as $tok) {
-                $t = trim($tok);
-                if ($t !== '' && mb_strlen($t) > 2) {
-                    $jobSkillNames[] = $t;
-                }
-            }
-            $jobSkillNames = array_slice(array_values(array_unique($jobSkillNames)), 0, 10);
-        }
-        $employeeSkillsLower = array_map('mb_strtolower', $skills);
-        $jobSkillsLower = array_map('mb_strtolower', $jobSkillNames);
-        $matchingLower = array_values(array_intersect($employeeSkillsLower, $jobSkillsLower));
-        $missingLower = array_values(array_diff($jobSkillsLower, $employeeSkillsLower));
-        $matchedDisplay = [];
-        foreach ($jobSkillNames as $n) {
-            if (in_array(mb_strtolower($n), $matchingLower, true)) {
-                $matchedDisplay[] = $n;
-            }
-        }
-        $missingDisplay = [];
-        foreach ($jobSkillNames as $n) {
-            if (in_array(mb_strtolower($n), $missingLower, true)) {
-                $missingDisplay[] = $n;
-            }
-        }
-        $parts = [];
-        $parts[] = "السادة/ {$companyName}\nتحية طيبة وبعد،";
-        $introParts = [];
-        if ($title !== '') {
-            $introParts[] = "{$title}";
-        }
-        if ($years !== '') {
-            $introParts[] = "بخبرة تمتد إلى {$years} سنة";
-        }
-        if ($location !== '') {
-            $introParts[] = "من {$location}";
-        }
-        $intro = empty($introParts) ? "أتقدم بطلبي للتقديم على وظيفة {$jobTitle} لديكم." : "أنا {$name}، " . implode('، ', $introParts) . "، أتقدم بطلبي للتقديم على وظيفة {$jobTitle}.";
-        $parts[] = $intro;
-        $matchLines = [];
-        if (!empty($matchedDisplay)) {
-            $matchLines[] = "تتطابق مهاراتي مع متطلبات هذه الوظيفة، لا سيما: " . implode('، ', array_slice($matchedDisplay, 0, 6)) . ".";
-        } elseif ($skillsText !== '') {
-            $matchLines[] = "أمتلك مجموعة من المهارات ذات الصلة مثل: {$skillsText}.";
-        }
-        if (!empty($jobSkillNames)) {
-            $matchLines[] = "اطلعت على المتطلبات المذكورة ومن بينها: " . implode('، ', array_slice($jobSkillNames, 0, 6)) . ".";
-        } elseif ($requirements !== '') {
-            $matchLines[] = "كما أن متطلباتها تتوافق مع خبراتي العملية ومسؤولياتي السابقة.";
-        }
-        if (!empty($missingDisplay)) {
-            $matchLines[] = "أدرك الحاجة لتعزيز مهارات: " . implode('، ', array_slice($missingDisplay, 0, 4)) . "، وقد بدأت بالفعل في تحسينها لضمان أداء عالي في دور {$jobTitle}.";
-        }
-        $parts[] = implode(' ', $matchLines);
-        if ($summary !== '') {
-            $parts[] = "خلاصة عني: {$summary}.";
-        }
-        if ($description !== '') {
-            $parts[] = "أرى أن طبيعة العمل لديكم، كما ورد في الوصف، تتماشى مع تطلعاتي المهنية وقدرتي على الإسهام بقيمة ملموسة ضمن فريقكم.";
-        }
-        $parts[] = "أتطلع لفرصة مناقشة كيف يمكنني الإسهام في نجاح {$companyName}. شاكرين ومقدرين وقتكم.";
-        $parts[] = "مع خالص التحية،\n{$name}";
-        return implode("\n\n", array_filter($parts, function ($p) { return trim($p) !== ''; }));
-    }
+        try {
+            $validator = \Validator::make($request->all(), [
+                'cv_text' => 'required|string|min:100'
+            ]);
 
-/**
- * Analyze CV text and extract information
- */
-public function analyzeCv(Request $request)
-{
-    try {
-        $validator = \Validator::make($request->all(), [
-            'cv_text' => 'required|string|min:100'
-        ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'يجب إدخال نص السيرة الذاتية',
+                    'errors' => $validator->errors()
+                ], 400);
+            }
 
-        if ($validator->fails()) {
+            $analysis = $this->analyzeCVText($request->cv_text);
+
+            if (!$analysis) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'فشل في تحليل السيرة الذاتية'
+                ], 500);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $analysis
+            ], 200);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'يجب إدخال نص السيرة الذاتية',
-                'errors' => $validator->errors()
-            ], 400);
-        }
-
-        $analysis = $this->analyzeCVText($request->cv_text);
-
-        if (!$analysis) {
-            return response()->json([
-                'success' => false,
-                'message' => 'فشل في تحليل السيرة الذاتية'
+                'message' => 'حدث خطأ أثناء تحليل السيرة الذاتية',
+                'error' => $e->getMessage()
             ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'data' => $analysis
-        ], 200);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'حدث خطأ أثناء تحليل السيرة الذاتية',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
-/**
- * Analyze CV and extract skills using AI
- */
-private function analyzeCVText($cvText)
-{
-    try {
-        $prompt = <<<PROMPT
-أنت خبير في تحليل السير الذاتية. قم بتحليل السيرة الذاتية التالية واستخراج المعلومات المهمة.
+    /**
+     * Analyze CV and extract skills using AI
+     */
+    private function analyzeCVText($cvText)
+    {
+        try {
+            $prompt = <<<PROMPT
+أنت خبير في تحليل السير الذاتية. قم بتحليل السيرة الذاتية التالية واستخرج المعلومات المهمة.
 
 نص السيرة الذاتية:
 {$cvText}
@@ -617,35 +511,35 @@ private function analyzeCVText($cvText)
 }
 PROMPT;
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->apiKey,
-            'Content-Type' => 'application/json',
-            'X-Title' => 'AI CV Analyzer'
-        ])->timeout(120)
-          ->withOptions(['connect_timeout' => 120])
-          ->post($this->apiEndpoint, [ 
-            'model' => $this->model,
-            'messages' => [
-                ['role' => 'system', 'content' => 'أنت خبير في تحليل السير الذاتية. قم بتحليل السيرة الذاتية واستخراج المعلومات المهمة بصيغة JSON فقط.'],
-                ['role' => 'user', 'content' => $prompt]
-            ],
-            'response_format' => ['type' => 'json_object'],
-        ]);
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Content-Type' => 'application/json',
+                'X-Title' => 'AI CV Analyzer'
+            ])->timeout(120)
+              ->withOptions(['connect_timeout' => 120])
+              ->post($this->apiEndpoint, [ 
+                'model' => $this->model,
+                'messages' => [
+                    ['role' => 'system', 'content' => 'أنت خبير في تحليل السير الذاتية. قم بتحليل السيرة الذاتية واستخراج المعلومات المهمة بصيغة JSON فقط.'],
+                    ['role' => 'user', 'content' => $prompt]
+                ],
+                'response_format' => ['type' => 'json_object'],
+            ]);
 
-        if ($response->successful()) {
-            $content = json_decode($response->body(), true)['choices'][0]['message']['content'];
-            $data = json_decode($content, true);
-            
-            if (json_last_error() === JSON_ERROR_NONE) {
-                return $data;
+            if ($response->successful()) {
+                $content = json_decode($response->body(), true)['choices'][0]['message']['content'];
+                $data = json_decode($content, true);
+                
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    return $data;
+                }
             }
+
+            return null;
+
+        } catch (\Exception $e) {
+            Log::error('AI CV Analysis Error: ' . $e->getMessage());
+            return null;
         }
-
-        return null;
-
-    } catch (\Exception $e) {
-        Log::error('AI CV Analysis Error: ' . $e->getMessage());
-        return null;
     }
-}
 }

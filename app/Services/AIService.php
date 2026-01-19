@@ -73,7 +73,7 @@ class AIService
     }
 
     /**
-     * Build prompt for job recommendations
+     * Build prompt for job recommendations - returns only job IDs
      */
     protected function buildJobRecommendationPrompt($employeeProfile, $availableJobs)
     {
@@ -113,20 +113,11 @@ class AIService
 2. قارنها بمتطلبات كل وظيفة
 3. أعط تقييم من 0 إلى 100 لكل وظيفة (مدى التوافق)
 4. رتب الوظائف من الأنسب إلى الأقل مناسبة
-5. اشرح لماذا كل وظيفة مناسبة أو غير مناسبة
+5. اختر أفضل 5 وظائف فقط وأرجع job_ids بالترتيب
 
 أرجع النتيجة بصيغة JSON التالية فقط (بدون أي نص إضافي):
 {
-  "recommendations": [
-    {
-      "job_id": 1,
-      "match_score": 95,
-      "reasoning": "السبب بالعربية",
-      "pros": ["ميزة 1", "ميزة 2"],
-      "cons": ["عيب 1", "عيب 2"],
-      "advice": "نصيحة للمتقدم"
-    }
-  ]
+  "recommended_job_ids": [1, 2, 3, 4, 5]
 }
 PROMPT;
     }
@@ -143,8 +134,8 @@ PROMPT;
             
             $data = json_decode($response, true);
             
-            if (json_last_error() === JSON_ERROR_NONE && isset($data['recommendations'])) {
-                return $data['recommendations'];
+            if (json_last_error() === JSON_ERROR_NONE && isset($data['recommended_job_ids'])) {
+                return $data['recommended_job_ids'];
             }
 
             Log::warning('Failed to parse AI recommendations', ['response' => $response]);
