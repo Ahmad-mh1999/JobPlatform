@@ -21,6 +21,9 @@ class Company extends Model
         'founded_year',
         'social_links',
         'is_verified',
+        'email',
+        'phone',
+        'company_size',
     ];
 
     protected $casts = [
@@ -38,6 +41,11 @@ class Company extends Model
     public function jobs()
     {
         return $this->hasMany(Job::class);
+    }
+
+    public function applications()
+    {
+        return $this->hasManyThrough(Application::class, Job::class);
     }
 
     // Get active jobs count

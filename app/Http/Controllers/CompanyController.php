@@ -46,7 +46,7 @@ class CompanyController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'company_name' => 'required|string|max:255',
+                'company_name' => 'nullable|string|max:255',
                 'category' => 'nullable|string|max:255',
                 'website' => 'nullable|url',
                 'location' => 'nullable|string|max:255',
@@ -55,6 +55,9 @@ class CompanyController extends Controller
                 'cover_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
                 'founded_year' => 'nullable|integer|min:1800|max:' . (date('Y') + 1),
                 'social_links' => 'nullable|json',
+                'email' => 'nullable|email',
+                'phone' => 'nullable|string|max:20',
+                'company_size' => 'nullable|string|max:50',
             ]);
 
             if ($validator->fails()) {
@@ -105,7 +108,10 @@ class CompanyController extends Controller
     {
         Log::info('CompanyController@show called', ['id' => $id]);
         try {
-            $company = Company::with(['user', 'jobs'])->find($id);
+            $company = Company::with(['user', 'jobs', 'applications'])
+                ->withCount('jobs')
+                ->withCount('applications')
+                ->find($id);
 
             if (!$company) {
                 return response()->json([
@@ -116,7 +122,11 @@ class CompanyController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => ['company' => $company]
+                'data' => [
+                    'company' => $company,
+                    'jobs_count' => $company->jobs_count,
+                    'applications_count' => $company->applications_count
+                ]
             ], 200);
 
         } catch (\Exception $e) {
@@ -152,7 +162,7 @@ class CompanyController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'company_name' => 'sometimes|string|max:255',
+                'company_name' => 'nullable|string|max:255',
                 'category' => 'nullable|string|max:255',
                 'website' => 'nullable|url',
                 'location' => 'nullable|string|max:255',
@@ -161,6 +171,9 @@ class CompanyController extends Controller
                 'cover_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
                 'founded_year' => 'nullable|integer|min:1800|max:' . (date('Y') + 1),
                 'social_links' => 'nullable|json',
+                'email' => 'nullable|email',
+                'phone' => 'nullable|string|max:20',
+                'company_size' => 'nullable|string|max:50',
                 'is_verified' => 'boolean',
             ]);
 

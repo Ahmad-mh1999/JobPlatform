@@ -318,7 +318,8 @@ class JobController extends Controller
             }
 
             $jobs = Job::where('company_id', $company->id)
-                      ->with('skills')
+                      ->with(['skills', 'applications'])
+                      ->withCount('applications')
                       ->orderBy('created_at', 'desc')
                       ->paginate(10);
 
@@ -331,6 +332,59 @@ class JobController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'حدث خطأ أثناء جلب وظائف الشركة',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Get company applications
+    public function getCompanyApplications()
+    {
+        Log::info('JobController@getCompanyApplications called', ['user_id' => auth()->id()]);
+        try {
+            $user = auth()->user();
+
+            if ($user->role !== 'company') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'هذه الخدمة متاحة للشركات فقط'
+                ], 403);
+            }
+
+            $company = \App\Models\Company::where('user_id', $user->id)->first();
+
+            if (!$company) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'الشركة غير موجودة'
+                ], 404);
+            }
+
+            // Get all job IDs for this company
+            $jobIds = Job::where('company_id', $company->id)->pluck('id');
+
+            if ($jobIds->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ], 200);
+            }
+
+            // Get all applications for these jobs
+            $applications = \App\Models\Application::whereIn('job_id', $jobIds)
+                ->with(['job', 'employeeProfile.user', 'user'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $applications
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء جلب طلبات التقديم',
                 'error' => $e->getMessage()
             ], 500);
         }

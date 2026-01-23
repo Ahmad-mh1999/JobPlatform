@@ -40,6 +40,12 @@ class Application extends Model
         return $this->belongsTo(EmployeeProfile::class);
     }
 
+    // Direct relationship to user through employeeProfile
+    public function user()
+    {
+        return $this->hasOneThrough(User::class, EmployeeProfile::class, 'id', 'id', 'employee_profile_id', 'user_id');
+    }
+
     public function getStatusLabelAttribute()
     {
         return match ($this->status) {

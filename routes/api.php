@@ -57,6 +57,7 @@ Route::middleware([JwtMiddleware::class])->group(function () {
     Route::put('/jobs/{id}', [JobController::class, 'update']);
     Route::delete('/jobs/{id}', [JobController::class, 'destroy']);
     Route::get('/jobs/company/my', [JobController::class, 'getByCompany']);
+    Route::get('/jobs/company/my/applications', [JobController::class, 'getCompanyApplications']);
 
     // Application routes
     Route::get('/applications/job/{jobId}', [ApplicationController::class, 'index'])->whereNumber('jobId');

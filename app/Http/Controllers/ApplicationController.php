@@ -45,7 +45,7 @@ class ApplicationController extends Controller
             }
 
             $applications = Application::where('job_id', $jobId)
-                                     ->with(['employeeProfile.user', 'job'])
+                                     ->with(['employeeProfile.user', 'user', 'job'])
                                      ->orderBy('created_at', 'desc')
                                      ->paginate(10);
 
@@ -145,7 +145,7 @@ class ApplicationController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'تم التقديم للوظيفة بنجاح',
-                'data' => ['application' => $application->load(['employeeProfile.user', 'job.company'])]
+                'data' => ['application' => $application->load(['employeeProfile.user', 'user', 'job.company'])]
             ], 201);
 
         } catch (\Exception $e) {
@@ -163,7 +163,7 @@ class ApplicationController extends Controller
         Log::info('ApplicationController@show called', ['user_id' => auth()->id(), 'id' => $id]);
         try {
             $user = auth()->user();
-            $application = Application::with(['employeeProfile.user', 'job.company'])->find($id);
+            $application = Application::with(['employeeProfile.user', 'user', 'job.company'])->find($id);
 
             if (!$application) {
                 return response()->json([
@@ -262,7 +262,7 @@ class ApplicationController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'تم تحديث حالة الطلب بنجاح',
-                'data' => ['application' => $application]
+                'data' => ['application' => $application->load(['employeeProfile.user', 'user', 'job.company'])]
             ], 200);
 
         } catch (\Exception $e) {
@@ -355,7 +355,7 @@ class ApplicationController extends Controller
             }
 
             $applications = Application::where('employee_profile_id', $employeeProfile->id)
-                                     ->with(['job.company'])
+                                     ->with(['job.company', 'user'])
                                      ->orderBy('created_at', 'desc')
                                      ->paginate(10);
 
