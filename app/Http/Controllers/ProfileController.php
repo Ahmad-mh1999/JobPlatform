@@ -104,6 +104,7 @@ class ProfileController extends Controller
                 'expected_salary' => 'nullable|numeric|min:0',
                 'is_available' => 'nullable|boolean',
                 'languages' => 'nullable|array',
+                'phone' => 'nullable|string|max:20',
             ]);
 
             if ($validator->fails()) {
@@ -134,6 +135,12 @@ class ProfileController extends Controller
                 ['user_id' => $user->id],
                 $data
             );
+
+            // Update user's phone if provided
+            if ($request->has('phone')) {
+                $user->phone = $request->get('phone');
+                $user->save();
+            }
 
             return response()->json([
                 'success' => true,

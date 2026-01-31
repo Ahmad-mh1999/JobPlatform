@@ -8,6 +8,7 @@ use App\Http\Controllers\JobController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\SuggestionController;
+use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AiController;
 use App\Http\Controllers\PostController;
@@ -19,6 +20,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
+
+// Public statistics route (no authentication required)
+Route::get('statistics/public', [StatisticsController::class, 'getPublicStatistics']);
 
 
 Route::middleware([JwtMiddleware::class])->group(function () {
@@ -109,6 +113,10 @@ Route::middleware(['jwt', 'role:admin'])->group(function () {
     Route::get('admin/skills/{id}',[SkillController::class, 'show']);
     Route::put('admin/skills/{id}',[SkillController::class, 'update']);
     Route::delete('admin/skills/{id}',[SkillController::class, 'destroy']);
+    
+    // Statistics routes (protected)
+    Route::get('statistics/platform', [StatisticsController::class, 'getPlatformStatistics']);
+    Route::get('statistics/detailed', [StatisticsController::class, 'getDetailedStatistics']);
 });
 
 // AI Suggestions Routes

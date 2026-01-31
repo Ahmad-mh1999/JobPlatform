@@ -72,7 +72,7 @@ class AiController extends Controller
         $formattedData .= "- ملخص البروفايل: " . ($profileData['summary'] ?? $profileData['bio'] ?? 'لا يوجد ملخص') . "\n";
         $formattedData .= "- سنوات الخبرة: " . ($profileData['years_of_experience'] ?? 'غير محدد') . "\n";
         $formattedData .= "- الموقع: " . ($profileData['location'] ?? 'غير محدد') . "\n";
-        $formattedData .= "- اللغات (تفصيل): " . ($profileData['languages'] ?? 'غير محدد') . "\n";
+        $formattedData .= "- اللغات (تفصيل): " . (is_array($profileData['languages']) ? implode(', ', $profileData['languages']) : ($profileData['languages'] ?? 'غير محدد')) . "\n";
         $formattedData .= "\n";
 
         // الخبرات العملية
@@ -231,7 +231,12 @@ class AiController extends Controller
         $formattedProfile = $this->formatProfileData($profileData);
         $formattedJobs = $this->formatAvailableJobs($jobs);
 
-        $systemPrompt = "أنت مساعد توظيف. حلّل بيانات المرشح والوظائف المتاحة، ثم أعِد ترتيب معرفات الوظائف من الأكثر ملاءمة إلى الأقل. يجب أن يكون الإخراج بصيغة JSON فقط بهذا الشكل:\n\n"
+        $systemPrompt = "أنت مساعد توظيف محترف. قم بتحليل بيانات المرشح والوظائف المتاحة بدقة، ثم أعِد ترتيب معرفات الوظائف من الأكثر ملاءمة إلى الأقل. ركز بشكل أساسي على:\n"
+                      . "1. تطابق المسمى الوظيفي والخبرات السابقة مع متطلبات الوظيفة\n"
+                      . "2. المجال المهني (تسويق، برمجة، إدارة، قانون، إلخ)\n"
+                      . "3. المهارات المطلوبة والمتوافرة\n"
+                      . "4. مستوى الخبرة المناسب\n\n"
+                      . "يجب أن يكون الإخراج بصيغة JSON فقط بهذا الشكل:\n\n"
                       . "{\n"
                       . "  \"recommended_job_ids\": [1, 2, 3, 4, 5]\n"
                       . "}\n\n"
@@ -524,6 +529,37 @@ class AiController extends Controller
                 }
             }
         }
+
+        // Extract keywords from profile experiences and title
+        $profileKeywords = [];
+        if (!empty($profileData['title'])) {
+            $profileKeywords[] = mb_strtolower($profileData['title']);
+        }
+        if (!empty($profileData['experiences'])) {
+            foreach ($profileData['experiences'] as $exp) {
+                if (!empty($exp['job_title'])) {
+                    $profileKeywords[] = mb_strtolower($exp['job_title']);
+                }
+                if (!empty($exp['description'])) {
+                    // Extract common marketing/programming keywords from description
+                    $desc = mb_strtolower($exp['description']);
+                    $marketingKeywords = ['تسويق', 'marketing', 'digital', 'social media', 'content', 'seo', 'ads', 'campaign'];
+                    $programmingKeywords = ['برمجة', 'programming', 'development', 'code', 'software', 'web', 'app', 'database', 'api'];
+                    
+                    foreach ($marketingKeywords as $keyword) {
+                        if (strpos($desc, $keyword) !== false) {
+                            $profileKeywords[] = $keyword;
+                        }
+                    }
+                    foreach ($programmingKeywords as $keyword) {
+                        if (strpos($desc, $keyword) !== false) {
+                            $profileKeywords[] = $keyword;
+                        }
+                    }
+                }
+            }
+        }
+
         $scored = [];
         foreach ($jobs as $job) {
             $jobSkills = [];
@@ -534,18 +570,89 @@ class AiController extends Controller
                     }
                 }
             }
+
             $score = 0;
+            
+            // 1. Skills matching (40% weight)
             if (!empty($employeeSkills) && !empty($jobSkills)) {
                 $matching = array_intersect($employeeSkills, $jobSkills);
-                $score = count($jobSkills) > 0 ? (count($matching) / count($jobSkills)) * 100 : 0;
+                $skillScore = count($jobSkills) > 0 ? (count($matching) / count($jobSkills)) * 40 : 0;
+                $score += $skillScore;
             }
+
+            // 2. Job title and description keyword matching (60% weight)
+            $jobText = mb_strtolower(($job['title'] ?? '') . ' ' . ($job['description'] ?? '') . ' ' . ($job['requirements'] ?? ''));
+            $keywordScore = 0;
+            
+            foreach ($profileKeywords as $keyword) {
+                // Exact title match gets higher score
+                if (strpos(mb_strtolower($job['title'] ?? ''), $keyword) !== false) {
+                    $keywordScore += 30; // 30 points for title match
+                }
+                // Description/requirements match gets lower score
+                elseif (strpos($jobText, $keyword) !== false) {
+                    $keywordScore += 15; // 15 points for description match
+                }
+            }
+            
+            // Bonus for marketing-related jobs when profile has marketing keywords
+            $hasMarketingKeywords = false;
+            foreach ($profileKeywords as $keyword) {
+                if (in_array($keyword, ['تسويق', 'marketing', 'digital', 'social media', 'content', 'seo', 'ads', 'campaign'])) {
+                    $hasMarketingKeywords = true;
+                    break;
+                }
+            }
+            
+            if ($hasMarketingKeywords) {
+                $marketingJobTitles = ['تسويق', 'marketing', 'محتوى', 'content', 'سوشيال', 'social', 'إعلان', 'ads'];
+                foreach ($marketingJobTitles as $marketingKeyword) {
+                    if (strpos(mb_strtolower($job['title'] ?? ''), $marketingKeyword) !== false) {
+                        $keywordScore += 20; // 20 points bonus for marketing jobs
+                        break;
+                    }
+                }
+            }
+            
+            $score += min($keywordScore, 60); // Cap at 60 points
+
             $scored[] = ['job' => $job, 'score' => round($score)];
         }
+
         usort($scored, function ($a, $b) {
             return $b['score'] <=> $a['score'];
         });
-        $orderedJobs = array_map(function ($entry) { return $entry['job']; }, $scored);
+
+        // Filter out jobs with very low scores (less than 15) and limit to top 10
+        $relevantJobs = array_filter($scored, function($entry) {
+            return $entry['score'] >= 15; // Minimum threshold
+        });
+        
+        // If no relevant jobs found, return top 5 anyway
+        if (empty($relevantJobs)) {
+            $relevantJobs = array_slice($scored, 0, 5);
+        } else {
+            $relevantJobs = array_slice($relevantJobs, 0, 10); // Limit to top 10 relevant
+        }
+
+        $orderedJobs = array_map(function ($entry) { return $entry['job']; }, $relevantJobs);
         $ids = array_map(function ($j) { return $j['id']; }, $orderedJobs);
+        
+        // Log the scoring for debugging
+        Log::info('Job recommendation scores:', [
+            'profile_keywords' => $profileKeywords,
+            'employee_skills' => $employeeSkills,
+            'total_jobs_processed' => count($scored),
+            'relevant_jobs_count' => count($relevantJobs),
+            'top_scores' => array_slice(array_map(function($entry) {
+                return [
+                    'job_id' => $entry['job']['id'],
+                    'title' => $entry['job']['title'],
+                    'score' => $entry['score']
+                ];
+            }, $relevantJobs), 0, 5)
+        ]);
+        
         return [$orderedJobs, $ids];
     }
 }
